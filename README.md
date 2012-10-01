@@ -1,7 +1,7 @@
 smtp-enum
 =========
 
-Enumerates email accounts through different methods
+Enumerates email accounts through different methods like VRFY, EXPN and RCPT TO.
 
 Requisites
 -----
