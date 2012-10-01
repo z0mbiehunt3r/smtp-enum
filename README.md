@@ -12,10 +12,3 @@ Usage
 ```
 $ ./main.py -d acme.local -f accounts.txt -m all -o ./enumerated.txt
 ```
-
-## How to use
-
-1) Include the plugin in your site:
-
-  <script async type="text/javascript" src="jquery-phslider.js"></script>
-	
