@@ -154,6 +154,7 @@ if __name__=='__main__':
         se = smtpEnumerator.smtpEnumerator(args.server, args.port, args.domain)
         
         print '[*] Checking supported SMTP commands'
+        # Not being listed as available methods doesn't mean that it isn't supported... just saying
         se.checkMethods()
         
         # Check selected methods
