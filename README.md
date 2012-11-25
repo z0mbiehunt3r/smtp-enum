@@ -12,3 +12,7 @@ Usage
 ```
 $ ./main.py -d acme.local -f accounts.txt -m all -o ./enumerated.txt
 ```
+
+Example
+-----
+![alt text](http://img526.imageshack.us/img526/5500/smtplist1.png)
