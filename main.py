@@ -60,7 +60,6 @@ def __banner():
         |----------------------------------------------------------|
         |                         smtp-enum                        |
         |               Alejandro Nolla (z0mbiehunt3r)             |
-        |                                      Powered by buguroo! |
         |----------------------------------------------------------|\n'''
     
     print banner
