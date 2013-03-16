@@ -2,7 +2,7 @@ __license__= '''
 smtp-enum - Enumerates email accounts through different methods
 
 Copyright (C) 2012  Alejandro Nolla Blanco - alejandro.nolla@gmail.com 
-Nick: z0mbiehunt3r - @z0mbiehunt3r
+Nick: z0mbiehunt3r - Twitter: https://twitter.com/z0mbiehunt3r
 Blog: navegandoentrecolisiones.blogspot.com
 
 
@@ -21,9 +21,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 '''
 
-'''
-Should improve exception handler and compare results for thread Vs multiprocess
-'''
+__version__ = '0.7'
 
 import multiprocessing
 import os
@@ -45,6 +43,7 @@ SMTP commands are character strings terminated by <CRLF> (http://tools.ietf.org/
 """
 EHLOCOMMAND = 'EHLO test\r\n'
 VRFYCOMMAND = 'VRFY postmaster\r\n'
+VRFYCOMMANDDIS = 'VRFY inexistentaccount123\r\n'
 EXPNCOMMAND = 'EXPN postmaster\r\n'
 MAILFROMCOMMAND = 'MAIL FROM: <admin@gmail.com>\r\n'
 BUFFERSIZE = 1024
@@ -67,7 +66,7 @@ class smtpEnumerator():
 
       self.banner = ''
       self.methods_allowed = []
-      self.verified_accounts = []
+      self.verified_accounts = set()
       self.expn_available = False
       self.vrfy_available = False
       self.rcpto_available = False
@@ -97,6 +96,9 @@ class smtpEnumerator():
       """
       Connect to SMTP server and send EHLO command to get accepted commands
       """
+      
+      host_allowed = True
+      
       try:
 	 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	 sock.connect((self.host, self.port))
@@ -107,6 +109,14 @@ class smtpEnumerator():
 	 sock.send(EHLOCOMMAND)
 	 response = sock.recv(BUFFERSIZE)
 	 sock.close()
+	 
+	 '''
+	 no response received, probably blocked for spammer or EHLO not supported
+	 
+	 500 #5.5.1 command not recognized
+	 '''
+	 if response == '' or response[0] == '5':
+	    host_allowed = False
 
 	 replycode = response[0:3]
 
@@ -120,6 +130,8 @@ class smtpEnumerator():
 
       except Exception, e:
 	 pass
+      
+      return host_allowed
 
    #----------------------------------------------------------------------
    def checkEXPNMethod(self):
@@ -184,12 +196,19 @@ class smtpEnumerator():
 	    sock.send(VRFYCOMMAND)
 	    response = sock.recv(BUFFERSIZE)
 	    replycode = response[0:3]
-	    sock.close()
-
+	    
 	    if replycode == '250' or replycode == '251':
 	       self.vrfy_available = True
+	    elif replycode == '252': # will do my best answer, disambiguation needed
+	       sock.send(VRFYCOMMANDDIS)
+	       response = sock.recv(BUFFERSIZE)
+	       replycode = response[0:3]
+	       if replycode[0] == '5':
+		  self.vrfy_available = True	     
 	    else:
 	       self.vrfy_available = False
+	    
+	    sock.close()
 
 	 except Exception, e:
 	    pass
@@ -478,7 +497,8 @@ def enumerateVRFYWorker(host, port, domain, accounts_input, accounts_output):
 	    sock.send(EHLOCOMMAND)
 	    response = sock.recv(BUFFERSIZE)
 
-	    sock.send('VRFY %s@%s\r\n' %(account, domain))
+	    #sock.send('VRFY %s@%s\r\n' %(account, domain))
+	    sock.send('VRFY %s\r\n' %account)
 	    response = sock.recv(BUFFERSIZE)
 	    replycode = response[0:3]
 	    if replycode[0] == '2':
