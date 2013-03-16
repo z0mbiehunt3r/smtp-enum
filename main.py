@@ -6,7 +6,7 @@ __license__= '''
 smtp-enum - Enumerates email accounts through different methods
 
 Copyright (C) 2012  Alejandro Nolla Blanco - alejandro.nolla@gmail.com 
-Nick: z0mbiehunt3r - @z0mbiehunt3r
+Nick: z0mbiehunt3r - Twitter: https://twitter.com/z0mbiehunt3r
 Blog: navegandoentrecolisiones.blogspot.com
 
 
@@ -60,6 +60,7 @@ def __banner():
         |----------------------------------------------------------|
         |                         smtp-enum                        |
         |               Alejandro Nolla (z0mbiehunt3r)             |
+        |                                      Powered by buguroo! |
         |----------------------------------------------------------|\n'''
     
     print banner
@@ -117,6 +118,7 @@ if __name__=='__main__':
     gr2.add_argument('-s', '--server', dest='server', required=False, help='SMTP server to analyze')    
     gr2.add_argument('-p', '--port', dest='port', required=False, type=int, default=25, help='SMTP server port')
     gr2.add_argument('--processes', dest='processes', action='store', type=int, required=False, help='number of process to use (default one per core)', default=multiprocessing.cpu_count())
+    gr2.add_argument('--full-smtp', dest='fullsmtp', action='store_true', required=False, help='enumerate against all SMTP servers')
     
     # Check if enough arguments are given
     __checkArgs()
@@ -139,120 +141,134 @@ if __name__=='__main__':
             
             for x, mxserver in enumerate(mxservers):
                 print '   [%i] %s {priority %i}' %(x,mxserver[0], mxserver[1])
-            response = False
-            # Ask for MX server to use
-            while response is False:
-                try:
-                    response = int(raw_input('Server to use? '))
-                    args.server = mxservers[response][0]
-                except IndexError:
-                    response = False
-        
-        print '[*] Going to enumerate email accounts against %s with method %s' %(args.server, args.methods.upper())
-    
-        se = smtpEnumerator.smtpEnumerator(args.server, args.port, args.domain)
-        
-        print '[*] Checking supported SMTP commands'
-        # Not being listed as available methods doesn't mean that it isn't supported... just saying
-        se.checkMethods()
-        
-        # Check selected methods
-        if args.methods == 'vrfy':
-            if 'VRFY' not in se.methods_allowed:
-                print '   [!] VRFY method seems not available'
-                print '[-] Finished'
-                sys.exit()
+            
+            smtp_servers_targets = [] # store smtp servers for enumerate against to
+            total_verified_accounts = set()
+            
+            if args.fullsmtp:
+                smtp_servers_targets = [smtp_server[0] for smtp_server in mxservers]
             else:
-                # is it really available to enumerate accounts?
+                response = False
+                # Ask for MX server to use
+                while response is False:
+                    try:
+                        response = int(raw_input('Server to use? '))
+                        smtp_servers_targets.append(mxservers[response][0])
+                    except IndexError:
+                        response = False
+        
+        for smtp_server in smtp_servers_targets:
+            print '[*] Going to enumerate email accounts against %s with method %s' %(smtp_server, args.methods.upper())
+        
+            se = smtpEnumerator.smtpEnumerator(smtp_server, args.port, args.domain)
+            
+            print '[*] Checking supported SMTP commands'
+            # Not being listed as available methods doesn't mean that it isn't supported... just saying
+            if not se.checkMethods():
+                print '[!] Server didn\'t answered/supported EHLO, maybe blocked for spammer?'
+                sys.exit()
+            
+            # Check selected methods
+            if args.methods == 'vrfy':
+                if 'VRFY' not in se.methods_allowed:
+                    print '   [!] VRFY method seems not available'
+                    print '[-] Finished'
+                    sys.exit()
+                else:
+                    # is it really available to enumerate accounts?
+                    if se.checkVRFYMethod():
+                        print '[+] VRFY method can be used, going to enumerate accounts'
+                        se.verified_accounts = se.enumerateVRFY(accounts, args.processes)
+                        if len(se.verified_accounts) == 0:
+                            print '   [-] Couldn\'t enumerate any account'
+                        else:
+                            for verified_account in se.verified_accounts:
+                                print '   <--> %s' %verified_account
+                    else:
+                        # It's a trap!
+                        print '   [!] VRFY method was listed as accepted but seems not available'
+                        print '[-] Finished'
+                        sys.exit()                
+                                
+            elif args.methods == 'expn':
+                if 'EXPN' not in se.methods_allowed:
+                    print '   [!] EXPN method seems not available'
+                    print '[-] Finished'
+                    sys.exit()
+                else:
+                    # is it really available to enumerate accounts?
+                    if se.checkEXPNMethod():
+                        print '[+] EXPN method can be used, going to enumerate accounts'
+                        se.verified_accounts = se.enumerateEXPN(accounts, args.processes)
+                        if len(se.verified_accounts) == 0:
+                            print '   [-] Couldn\'t enumerate any account'
+                        else:
+                            for verified_account in se.verified_accounts:
+                                print '   <--> %s' %verified_account
+                    else:
+                        # It's a trap!
+                        print '   [!] EXPN method was listed as accepted but seems not available'
+                        print '[-] Finished'
+                        sys.exit()                
+            
+            elif args.methods == 'rcptto':
+                if se.checkRCPTTOMethod():
+                    print '[+] RCPT TO method can be used, going to enumerate accounts'
+                    se.verified_accounts = se.enumerateRCPTTO(accounts, args.processes)
+                    if len(se.verified_accounts) == 0:
+                        print '   [-] Couldn\'t enumerate any account'
+                    else:
+                        for verified_account in se.verified_accounts:
+                            print '   <--> %s' %verified_account
+                else:
+                    print '   [!] RCPT TO method seems not available'
+                    print '[-] Finished'
+                    sys.exit()            
+            
+            elif args.methods == 'all':
+                verified_accounts = []
+                
+                # VRFY method
                 if se.checkVRFYMethod():
                     print '[+] VRFY method can be used, going to enumerate accounts'
-                    se.verified_accounts = se.enumerateVRFY(accounts, args.processes)
-                    if len(se.verified_accounts) == 0:
+                    new_accounts = se.enumerateVRFY(accounts, args.processes)
+                    if len(new_accounts) == 0:
                         print '   [-] Couldn\'t enumerate any account'
                     else:
-                        for verified_account in se.verified_accounts:
-                            print '   <--> %s' %verified_account
-                else:
-                    # It's a trap!
-                    print '   [!] VRFY method was listed as accepted but seems not available'
-                    print '[-] Finished'
-                    sys.exit()                
-                            
-        elif args.methods == 'expn':
-            if 'EXPN' not in se.methods_allowed:
-                print '   [!] EXPN method seems not available'
-                print '[-] Finished'
-                sys.exit()
-            else:
-                # is it really available to enumerate accounts?
+                        verified_accounts.extend(new_accounts)
+                        for new_account in new_accounts:
+                            print '   <--> %s' %new_account         
+                
+                # EXPN method
                 if se.checkEXPNMethod():
                     print '[+] EXPN method can be used, going to enumerate accounts'
-                    se.verified_accounts = se.enumerateEXPN(accounts, args.processes)
-                    if len(se.verified_accounts) == 0:
+                    new_accounts = se.enumerateEXPN(accounts, args.processes)
+                    if len(new_accounts) == 0:
                         print '   [-] Couldn\'t enumerate any account'
                     else:
-                        for verified_account in se.verified_accounts:
-                            print '   <--> %s' %verified_account
-                else:
-                    # It's a trap!
-                    print '   [!] EXPN method was listed as accepted but seems not available'
-                    print '[-] Finished'
-                    sys.exit()                
-        
-        elif args.methods == 'rcptto':
-            if se.checkRCPTTOMethod():
-                print '[+] RCPT TO method can be used, going to enumerate accounts'
-                se.verified_accounts = se.enumerateRCPTTO(accounts, args.processes)
-                if len(se.verified_accounts) == 0:
-                    print '   [-] Couldn\'t enumerate any account'
-                else:
-                    for verified_account in se.verified_accounts:
-                        print '   <--> %s' %verified_account
-            else:
-                print '   [!] RCPT TO method seems not available'
-                print '[-] Finished'
-                sys.exit()            
-        
-        elif args.methods == 'all':
-            verified_accounts = []
-            
-            # VRFY method
-            if se.checkVRFYMethod():
-                print '[+] VRFY method can be used, going to enumerate accounts'
-                new_accounts = se.enumerateVRFY(accounts, args.processes)
-                if len(new_accounts) == 0:
-                    print '   [-] Couldn\'t enumerate any account'
-                else:
-                    verified_accounts.extend(new_accounts)
-                    for new_account in new_accounts:
-                        print '   <--> %s' %new_account         
-            
-            # EXPN method
-            if se.checkEXPNMethod():
-                print '[+] EXPN method can be used, going to enumerate accounts'
-                new_accounts = se.enumerateEXPN(accounts, args.processes)
-                if len(new_accounts) == 0:
-                    print '   [-] Couldn\'t enumerate any account'
-                else:
-                    verified_accounts.extend(new_accounts)
-                    for new_account in new_accounts:
-                        print '   <--> %s' %new_account
-            
-            # RCPT TO method
-            if se.checkRCPTTOMethod():
-                print '[+] RCPT TO method can be used, going to enumerate accounts'
-                new_accounts = se.enumerateRCPTTO(accounts, args.processes)
-                if len(new_accounts) == 0:
-                    print '   [-] Couldn\'t enumerate any account'
-                else:
-                    verified_accounts.extend(new_accounts)                    
-                    for new_account in new_accounts:
-                        print '   <--> %s' %new_account
-            
-            # Insert total verified accounts to smtpEnumerator object
-            se.verified_accounts = verified_accounts
-        
-        if len(se.verified_accounts) > 0:
+                        verified_accounts.extend(new_accounts)
+                        for new_account in new_accounts:
+                            print '   <--> %s' %new_account
+                
+                # RCPT TO method
+                if se.checkRCPTTOMethod():
+                    print '[+] RCPT TO method can be used, going to enumerate accounts'
+                    new_accounts = se.enumerateRCPTTO(accounts, args.processes)
+                    if len(new_accounts) == 0:
+                        print '   [-] Couldn\'t enumerate any account'
+                    else:
+                        verified_accounts.extend(new_accounts)                    
+                        for new_account in new_accounts:
+                            print '   <--> %s' %new_account
+                
+                # Insert total verified accounts to smtpEnumerator object
+                se.verified_accounts = verified_accounts
+            total_verified_accounts.update(set(se.verified_accounts))
+
+
+        total_verified_accounts.update(set(se.verified_accounts))
+        if len(total_verified_accounts) > 0:
+            se.verified_accounts = total_verified_accounts # quick 'n dirty...
             print '[*] Saved enumerated accounts {%i}...' %len(se.verified_accounts)
             se.writeAccounts(args.output)
             print '[-] Done'
