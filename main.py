@@ -157,6 +157,9 @@ if __name__=='__main__':
                     except IndexError:
                         response = False
         
+        else:
+            smtp_servers_targets = [args.server]
+        
         for smtp_server in smtp_servers_targets:
             print '[*] Going to enumerate email accounts against %s with method %s' %(smtp_server, args.methods.upper())
         
