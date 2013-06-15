@@ -130,6 +130,9 @@ if __name__=='__main__':
         accounts = __readAccounts(args.accounts)
         print '[*] Readed %i accounts to test' %len(accounts)
         
+        smtp_servers_targets = [] # store smtp servers for enumerate against to
+        total_verified_accounts = set()
+        
         # Need to get MX servers?
         if not args.server:
             print '[*] MX server not provided, going to retrieve them...'
@@ -141,9 +144,6 @@ if __name__=='__main__':
             
             for x, mxserver in enumerate(mxservers):
                 print '   [%i] %s {priority %i}' %(x,mxserver[0], mxserver[1])
-            
-            smtp_servers_targets = [] # store smtp servers for enumerate against to
-            total_verified_accounts = set()
             
             if args.fullsmtp:
                 smtp_servers_targets = [smtp_server[0] for smtp_server in mxservers]
@@ -158,7 +158,7 @@ if __name__=='__main__':
                         response = False
         
         else:
-            smtp_servers_targets = [args.server]
+            smtp_servers_targets.append(args.server)
         
         for smtp_server in smtp_servers_targets:
             print '[*] Going to enumerate email accounts against %s with method %s' %(smtp_server, args.methods.upper())
